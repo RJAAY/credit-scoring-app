@@ -14,6 +14,9 @@ import java.time.LocalDateTime;
 import com.ranya.backend.dto.StatusUpdateRequest;
 import com.ranya.backend.exception.ResourceNotFoundException;
 import com.ranya.backend.exception.InvalidTransitionException;
+import com.ranya.backend.repository.LoanApplicationRepository;
+import org.springframework.security.access.AccessDeniedException;
+import java.io.IOException;
 
 @Service
 public class LoanApplicationService {
@@ -21,13 +24,15 @@ public class LoanApplicationService {
     private final LoanApplicationRepository loanApplicationRepository;
     private final StatusHistoryRepository statusHistoryRepository;
     private final ScoringService scoringService;
+    private final PdfService pdfService;
 
     public LoanApplicationService(LoanApplicationRepository loanApplicationRepository,
                                   StatusHistoryRepository statusHistoryRepository,
-                                  ScoringService scoringService) {
+                                  ScoringService scoringService ,PdfService pdfService) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.statusHistoryRepository = statusHistoryRepository;
         this.scoringService = scoringService;
+        this.pdfService = pdfService;
     }
 
     public LoanApplicationResponse soumettre(LoanApplicationRequest request, User client) {
@@ -149,5 +154,22 @@ public class LoanApplicationService {
                 demande.getStatut(), demande.getResultatScore().getScoreGlobal(),
                 demande.getResultatScore().getDetailFacteurs(), demande.getDateSoumission()
         );
+    }
+    public byte[] genererContratPdf(Long demandeId, User utilisateur) throws IOException {
+        LoanApplication demande = loanApplicationRepository.findById(demandeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Demande introuvable"));
+
+        boolean estProprietaire = demande.getClient().getId().equals(utilisateur.getId());
+        boolean estAgentOuManager = utilisateur.getRole() == Role.AGENT_CREDIT || utilisateur.getRole() == Role.MANAGER;
+
+        if (!estProprietaire && !estAgentOuManager) {
+            throw new AccessDeniedException("Vous n'avez pas accès à ce contrat.");
+        }
+
+        if (demande.getStatut() != LoanStatus.APPROUVEE && demande.getStatut() != LoanStatus.DECAISSEE) {
+            throw new InvalidTransitionException("Le contrat n'est disponible que pour une demande approuvée ou décaissée.");
+        }
+
+        return pdfService.genererContrat(demande);
     }
 }

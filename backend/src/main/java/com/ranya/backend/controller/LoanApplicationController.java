@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 import com.ranya.backend.dto.StatusUpdateRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
+import org.springframework.http.*;
+import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/loans")
@@ -43,5 +45,17 @@ public class LoanApplicationController {
                                                  @RequestBody StatusUpdateRequest request,
                                                  @AuthenticationPrincipal User utilisateur) {
         return loanApplicationService.changerStatut(id, request, utilisateur);
+    }
+
+    @GetMapping("/{id}/contrat")
+    public ResponseEntity<byte[]> telechargerContrat(@PathVariable Long id,
+                                                     @AuthenticationPrincipal User utilisateur) throws IOException {
+        byte[] pdf = loanApplicationService.genererContratPdf(id, utilisateur);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDisposition(ContentDisposition.attachment().filename("contrat-pret-" + id + ".pdf").build());
+
+        return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
     }
 }
